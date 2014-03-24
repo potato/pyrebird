@@ -19,36 +19,43 @@ class UI():
         self.loop.set_alarm_in(1, self.periodic_update, self)
 
     def draw_playlist(self):
-        self.playlist = Tracklist(self.player.search('foxsky'))
-        w = urwid.Frame(self.playlist, urwid.AttrWrap(urwid.Divider(u'\u2015'), 'body'))
-        return w
+        self.playlist = Tracklist([])
+        return urwid.Frame(self.playlist, urwid.AttrWrap(urwid.Divider(u'\u2015'), 'body'))
+
+    def update_playlist(self, q):
+        tracks = self.player.search(q)
+        self.playlist.update(tracks)
+        self.container.focus_position = 'body'
 
     def draw_player(self):
         self.topbar = Topbar()
         return urwid.AttrWrap(self.topbar, 'body')
 
     def draw_statusbar(self):
-        w = urwid.AttrWrap(urwid.Pile([
+        self.statusbar = Statusbar(self)
+        return urwid.AttrWrap(urwid.Pile([
                 urwid.Columns([
                     urwid.Divider(u'\u2015'),
                     (8, urwid.Text('[23/99]')),
                 ]),
-                urwid.Text('<write something here>'),
+                self.statusbar
         ]), 'body')
-        return w
 
-    def draw_input(self, txt):
-        urwid.PopUpTarget(urwid.Text(txt, 'center'))
+    def draw_input(self):
+        self.statusbar.set_caption('Search: ')
+        self.container.focus_position = 'footer'
+        self.statusbar.focus_position = 0
 
     def _handle_global_input(self, key):
         if key == 'q':
             raise urwid.ExitMainLoop()
         elif key == 's':
-            self.draw_input('hell')
+            self.draw_input()
         elif key == 'enter':
             tr = self.playlist.focus
-            self.topbar.update(tr)
-            self.player.play(tr.url)
+            if tr is not None:
+                self.topbar.update(tr)
+                self.player.play(tr.url)
         elif key in ('h', 'left'):
             self.player.volume_dec()
         elif key in ('l', 'right'):
@@ -97,12 +104,41 @@ class Topbar(urwid.Columns):
             self.time_current.set_text(printable_duration(time))
 
 
+class Statusbar(urwid.Columns):
+    def __init__(self, ui):
+        self.ui = ui
+        self._items = [
+                urwid.Edit('')
+                ]
+        super(Statusbar, self).__init__(self._items)
+
+    def set_caption(self, txt):
+        self.contents[0][0].set_caption(txt)
+
+    def set_text(self, txt):
+        self.contents[0][0].set_edit_text(txt)
+
+    def keypress(self, size, key):
+        super(Statusbar, self).keypress(size, key)
+        if key == 'enter':
+            q = self.contents[0][0].edit_text
+            self.set_caption('')
+            self.set_text('')
+            self.ui.update_playlist(q)
+
+
 class Tracklist(urwid.ListBox):
     def __init__(self, tracks):
         self.items = []
         for track in tracks:
             self.items.append(TracklistItem(track))
         super(Tracklist, self).__init__(urwid.SimpleListWalker(self.items))
+
+    def update(self, tracks):
+        self.items = []
+        for tr in tracks:
+            self.items.append(TracklistItem(tr))
+        self.body = urwid.SimpleListWalker(self.items)
 
 
 class TracklistItem(urwid.WidgetWrap):
