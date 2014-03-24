@@ -19,12 +19,13 @@ class UI():
         self.loop.set_alarm_in(1, self.periodic_update, self)
 
     def draw_playlist(self):
-        self.playlist = Tracklist([])
+        self.playlist = Tracklist(self, [])
         return urwid.Frame(self.playlist, urwid.AttrWrap(urwid.Divider(u'\u2015'), 'body'))
 
     def update_playlist(self, q):
         tracks = self.player.search(q)
         self.playlist.update(tracks)
+        self.tracks_count.set_text('[-/%d]' % len(tracks))
         self.container.focus_position = 'body'
 
     def draw_player(self):
@@ -32,11 +33,12 @@ class UI():
         return urwid.AttrWrap(self.topbar, 'body')
 
     def draw_statusbar(self):
+        self.tracks_count = urwid.Text('[-/-]')
         self.statusbar = Statusbar(self)
         return urwid.AttrWrap(urwid.Pile([
                 urwid.Columns([
                     urwid.Divider(u'\u2015'),
-                    (8, urwid.Text('[23/99]')),
+                    (len(self.tracks_count.get_text()[0]) + 1, self.tracks_count),
                 ]),
                 self.statusbar
         ]), 'body')
@@ -119,17 +121,18 @@ class Statusbar(urwid.Columns):
         self.contents[0][0].set_edit_text(txt)
 
     def keypress(self, size, key):
-        super(Statusbar, self).keypress(size, key)
         if key == 'enter':
             q = self.contents[0][0].edit_text
             self.set_caption('')
             self.set_text('')
             self.ui.update_playlist(q)
+        super(Statusbar, self).keypress(size, key)
 
 
 class Tracklist(urwid.ListBox):
-    def __init__(self, tracks):
+    def __init__(self, ui, tracks):
         self.items = []
+        self.ui = ui
         for track in tracks:
             self.items.append(TracklistItem(track))
         super(Tracklist, self).__init__(urwid.SimpleListWalker(self.items))
@@ -139,6 +142,11 @@ class Tracklist(urwid.ListBox):
         for tr in tracks:
             self.items.append(TracklistItem(tr))
         self.body = urwid.SimpleListWalker(self.items)
+
+    def keypress(self, size, key):
+        if key in ('up', 'down', 'j', 'k'):
+            self.ui.tracks_count.set_text('[%d/%d]' % (self.focus_position, len(self.items)))
+        return super(Tracklist, self).keypress(size, key)
 
 
 class TracklistItem(urwid.WidgetWrap):
@@ -159,11 +167,10 @@ class TracklistItem(urwid.WidgetWrap):
 
     def keypress(self, size, key):
         if key == 'j':
-            return 'down'
+            key = 'down'
         elif key == 'k':
-            return 'up'
-        else:
-            return key
+            key = 'up'
+        return key
 
 
 def printable_duration(secs):
