@@ -10,10 +10,22 @@ Pyrebird is a hackable music player for various music sources (soundcloud, ... n
 3. install other dependencies: `pip install urwid requests`
 4. run `python pyrebird.py` to start the application
 
+### Usage
+
+Currently Pyrebird comes with an urwid ui, which accepts the following keystrokes:
+* `s`: prompt for search
+* `p`: toggle play/pause
+* `j` or `up`: move up in the tracklist
+* `k` or `down`: move down in the tracklist
+* `h` or `left`: decrease volume
+* `l` or `right`: increase volume
+* `q`: quits Pyrebird
+
 ### TODO
 
 * more apis (for online streams and local files too)
 * more UIs (perhaps some socket-listener-thingy too)
+* config file handling
 
 ### Bugs
 
