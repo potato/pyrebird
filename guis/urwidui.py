@@ -126,6 +126,10 @@ class Statusbar(urwid.Columns):
             self.set_caption('')
             self.set_text('')
             self.ui.update_playlist(q)
+        elif key == 'esc':
+            self.set_caption('')
+            self.set_text('')
+            self.ui.container.focus_position = 'body'
         super(Statusbar, self).keypress(size, key)
 
 

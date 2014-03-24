@@ -13,7 +13,7 @@ Pyrebird is a hackable music player for various music sources (soundcloud, ... n
 ### Usage
 
 Currently Pyrebird comes with an urwid ui, which accepts the following keystrokes:
-* `s`: prompt for search
+* `s`: prompt for search (`escape` cancels the prompt)
 * `p`: toggle play/pause
 * `j` or `up`: move up in the tracklist
 * `k` or `down`: move down in the tracklist
