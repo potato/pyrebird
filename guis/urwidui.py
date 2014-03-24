@@ -25,7 +25,7 @@ class UI():
     def update_playlist(self, q):
         tracks = self.player.search(q)
         self.playlist.update(tracks)
-        self.tracks_count.set_text('[-/%d]' % len(tracks))
+        self.tracks_count.set_text('[--/%02d]' % len(tracks))
         self.container.focus_position = 'body'
 
     def draw_player(self):
@@ -33,7 +33,7 @@ class UI():
         return urwid.AttrWrap(self.topbar, 'body')
 
     def draw_statusbar(self):
-        self.tracks_count = urwid.Text('[-/-]')
+        self.tracks_count = urwid.Text('[--/--]')
         self.statusbar = Statusbar(self)
         return urwid.AttrWrap(urwid.Pile([
                 urwid.Columns([
@@ -145,7 +145,7 @@ class Tracklist(urwid.ListBox):
 
     def keypress(self, size, key):
         if key in ('up', 'down', 'j', 'k'):
-            self.ui.tracks_count.set_text('[%d/%d]' % (self.focus_position, len(self.items)))
+            self.ui.tracks_count.set_text('[%02d/%02d]' % (self.focus_position, len(self.items)))
         return super(Tracklist, self).keypress(size, key)
 
 
