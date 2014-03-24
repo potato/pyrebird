@@ -7,11 +7,8 @@ import gst
 from guis.urwidui import UI
 import apis
 
-CLIENT_ID = 'b45b1aa10f1ac2941910a7f0d10f8e28'
-MAIN_URL = 'http://api.soundcloud.com'
 
-
-class SoundcloudPlayer():
+class Pyrebird():
     def __init__(self):
         self.player = gst.element_factory_make('playbin2', 'player')
         self.player.set_property('video-sink', gst.element_factory_make('fakesink', 'fakesink'))
@@ -54,14 +51,11 @@ class SoundcloudPlayer():
             self.player.set_state(gst.STATE_NULL)
             err, debug = msg.parse_error()
             print '[E] ', err, debug
-        elif msg.type == gst.MESSAGE_ANY:
-            pass
         return True
 
 if __name__ == '__main__':
     try:
-        sc = SoundcloudPlayer()
-        ui = UI(sc)
-        ui.main_loop()
+        pyrebird = UI(Pyrebird())
+        pyrebird.main_loop()
     except Exception as e:
         print e

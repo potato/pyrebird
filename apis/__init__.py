@@ -7,7 +7,6 @@ def search(q):
     result = []
     for api in apis:
         for r in api.search(q):
-            print r
             r.update({'api': api.tag})
             result += [r]
     return sorted(result, key=lambda x: x['title'])
