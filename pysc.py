@@ -4,7 +4,8 @@
 import pygst
 pygst.require('0.10')
 import gst
-import requests
+from guis.urwidui import UI
+import apis
 
 CLIENT_ID = 'b45b1aa10f1ac2941910a7f0d10f8e28'
 MAIN_URL = 'http://api.soundcloud.com'
@@ -19,25 +20,32 @@ class SoundcloudPlayer():
         self.bus.add_signal_watch()
         self.bus.connect('message', self.handle_message)
 
-    def search_track(self, q):
-        r = self.make_request('tracks', {'q': q})
-        if r.status_code == 200:
-            for test in r.json():
-                print test['id'], ': ', test['title']
+    def search(self, q):
+        return apis.search(q)
 
-    def play_track(self, sid):
+    def play(self, url):
         self.player.set_state(gst.STATE_NULL)
-        r = self.make_request('tracks/%d' % sid)
-        if r.status_code == 200:
-            self.player.set_property('uri', r.json().get('stream_url') + '?client_id=' + CLIENT_ID)
+        self.player.set_property('uri', url)
+        self.player.set_state(gst.STATE_PLAYING)
+
+    def stop(self):
+        self.player.set_state(gst.STATE_NULL)
+
+    def pause(self):
+        state = filter(lambda x: type(x) == gst.State, self.player.get_state())
+        if gst.STATE_PLAYING in state:
+            self.player.set_state(gst.STATE_PAUSED)
+        elif gst.STATE_PAUSED in state:
             self.player.set_state(gst.STATE_PLAYING)
 
-    def make_request(self, rtype, args={}):
-        args.update({'client_id': CLIENT_ID})
-        return requests.get(MAIN_URL + '/' + rtype + '.json', params=args)
+    def volume_inc(self):
+        volume = self.player.get_property('volume')
+        self.player.set_property('volume', volume + 0.01)
 
-    def stop_player(self):
-        self.player.set_state(gst.STATE_NULL)
+    def volume_dec(self):
+        volume = self.player.get_property('volume')
+        if volume > 0.01:
+            self.player.set_property('volume', volume - 0.01)
 
     def handle_message(self, bus, msg):
         if msg.type == gst.MESSAGE_EOS:
@@ -46,18 +54,14 @@ class SoundcloudPlayer():
             self.player.set_state(gst.STATE_NULL)
             err, debug = msg.parse_error()
             print '[E] ', err, debug
-        else:
-            print msg
+        elif msg.type == gst.MESSAGE_ANY:
+            pass
+        return True
 
 if __name__ == '__main__':
-    sc = SoundcloudPlayer()
-    while True:
-        cmd = raw_input('> ')
-        if cmd.startswith('.play'):
-            sid = cmd.split(' ')[1]
-            sc.play_track(int(sid))
-        elif cmd == '.quit':
-            sc.stop_player()
-            break
-        else:
-            sc.search_track(cmd)
+    try:
+        sc = SoundcloudPlayer()
+        ui = UI(sc)
+        ui.main_loop()
+    except Exception as e:
+        print e
