@@ -6,7 +6,7 @@ Pyrebird is a hackable music player for various music sources (soundcloud, ... n
 ### Installation
 
 1. clone source: `git clone https://github.com/potato/pyrebird.git`
-2. install gstreamer and the python bindings
+2. install gstreamer, plugins-ugly for gstreamer and the python bindings
 3. install other dependencies: `pip install urwid requests`
 4. run `python pyrebird.py` to start the application
 
