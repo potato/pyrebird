@@ -29,10 +29,10 @@ class Pyrebird():
         self.player.set_state(gst.STATE_NULL)
 
     def pause(self):
-        state = filter(lambda x: type(x) == gst.State, self.player.get_state())
-        if gst.STATE_PLAYING in state:
+        state = self.player.get_state()
+        if gst.STATE_PLAYING == state[1]:
             self.player.set_state(gst.STATE_PAUSED)
-        elif gst.STATE_PAUSED in state:
+        elif gst.STATE_PAUSED == state[1]:
             self.player.set_state(gst.STATE_PLAYING)
 
     def volume_inc(self):
@@ -43,6 +43,9 @@ class Pyrebird():
         volume = self.player.get_property('volume')
         if volume > 0.01:
             self.player.set_property('volume', volume - 0.01)
+
+    def get_volume(self):
+        return self.player.get_property('volume')
 
     def handle_message(self, bus, msg):
         if msg.type == gst.MESSAGE_EOS:
