@@ -1,7 +1,7 @@
 import urwid
 
 
-class UI():
+class Interface():
     def __init__(self, player=None):
         # init variables, objects
         self.palette = [

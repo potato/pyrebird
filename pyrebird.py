@@ -4,7 +4,7 @@
 import pygst
 pygst.require('0.10')
 import gst
-from guis.urwidui import UI
+from interfaces.urwidui import Interface
 import apis
 
 
@@ -58,7 +58,7 @@ class Pyrebird():
 
 if __name__ == '__main__':
     try:
-        pyrebird = UI(Pyrebird())
+        pyrebird = Interface(Pyrebird())
         pyrebird.main_loop()
     except Exception as e:
         print e
