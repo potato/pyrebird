@@ -1,168 +1,196 @@
 import urwid
-from math import ceil
 
 
 class UI():
     def __init__(self, player=None):
+        # init variables, objects
         self.palette = [
-                ('body', 'yellow', ''),
-                ('focus', 'black', 'brown'),
-                ]
+            ('body', 'yellow', ''),
+            ('focus', 'black', 'brown'),
+        ]
         self.player = player
-        self.time_total = None
-        self.time_current = None
-        self.title = None
+        self.playlist = Playlist()
+        self.searchlist = Searchlist()
+        self.prompt = Prompt()
+        self.top = Top(self.player)
+        self.window = urwid.Frame(self.playlist.get_box(), self.top, self.prompt)
         self.screen = urwid.raw_display.Screen()
-        self.width, self.height = self.screen.get_cols_rows()
-        self.container = urwid.Frame(self.draw_playlist(), self.draw_player(), self.draw_statusbar())
-        self.loop = urwid.MainLoop(self.container, self.palette, unhandled_input=self._handle_global_input)
-        self.loop.set_alarm_in(1, self.periodic_update, self)
 
-    def draw_playlist(self):
-        self.playlist = Tracklist(self, [])
-        return urwid.Frame(self.playlist, urwid.AttrWrap(urwid.Divider(u'\u2015'), 'body'))
+        # setting up signals
+        urwid.register_signal(Prompt, ['perform_search', 'cancel_input'])
+        urwid.register_signal(Searchlist, ['add_track', 'play_track'])
+        urwid.register_signal(Playlist, ['play_track'])
+        urwid.register_signal(urwid.Frame, ['set_volume'])
+        urwid.connect_signal(self.prompt, 'perform_search', self.search_callback)
+        urwid.connect_signal(self.prompt, 'cancel_input', self.cancel_input_callback)
+        urwid.connect_signal(self.searchlist, 'add_track', self.add_track_callback)
+        urwid.connect_signal(self.searchlist, 'play_track', self.play_track_callback)
+        urwid.connect_signal(self.searchlist, 'play_track', self.top.play_track_callback)
+        urwid.connect_signal(self.playlist, 'play_track', self.play_track_callback)
+        urwid.connect_signal(self.playlist, 'play_track', self.top.play_track_callback)
+        urwid.connect_signal(self.window, 'set_volume', self.top.set_volume_callback)
 
-    def update_playlist(self, q):
-        tracks = self.player.search(q)
-        self.playlist.update(tracks)
-        self.tracks_count.set_text('[--/%02d]' % len(tracks))
-        self.container.focus_position = 'body'
-
-    def draw_player(self):
-        self.topbar = Topbar()
-        return urwid.AttrWrap(self.topbar, 'body')
-
-    def draw_statusbar(self):
-        self.tracks_count = urwid.Text('[--/--]')
-        self.statusbar = Statusbar(self)
-        return urwid.AttrWrap(urwid.Pile([
-                urwid.Columns([
-                    urwid.Divider(u'\u2015'),
-                    (len(self.tracks_count.get_text()[0]) + 1, self.tracks_count),
-                ]),
-                self.statusbar
-        ]), 'body')
-
-    def draw_input(self):
-        self.statusbar.set_caption('Search: ')
-        self.container.focus_position = 'footer'
-        self.statusbar.focus_position = 0
+        # starting the main loop
+        self.loop = urwid.MainLoop(self.window, self.palette, unhandled_input=self._handle_global_input)
+        self.loop.set_alarm_in(0.5, self.top.update)
 
     def _handle_global_input(self, key):
         if key == 'q':
             raise urwid.ExitMainLoop()
         elif key == 's':
-            self.draw_input()
-        elif key == 'enter':
-            tr = self.playlist.focus
-            if tr is not None:
-                self.topbar.update(tr)
-                self.player.play(tr.url)
+            self.window.focus_position = 'footer'
+            self.prompt.do_ask('Search: ')
+        elif key == 'tab':
+            if self.window.get_body().get_body() == self.playlist:
+                self.window.set_body(self.searchlist.get_box())
+            else:
+                self.window.set_body(self.playlist.get_box())
         elif key in ('h', 'left'):
             self.player.volume_dec()
+            urwid.emit_signal(self.window, 'set_volume')
         elif key in ('l', 'right'):
             self.player.volume_inc()
-        elif key in ('p', ' '):
+            urwid.emit_signal(self.window, 'set_volume')
+        elif key in ('p'):
             self.player.pause()
 
-    def periodic_update(self, loop, caller):
-        caller.topbar.update_time(caller.player.player)
-        loop.set_alarm_in(1, caller.periodic_update, caller)
+    def search_callback(self):
+        q = self.prompt.edit_text
+        self.searchlist.update(self.player.search(q))
+        self.searchlist.set_result_text(q)
+        self.window.set_body(self.searchlist.get_box())
+        self.prompt.hide()
+        self.window.focus_position = 'body'
+
+    def cancel_input_callback(self):
+        self.prompt.hide()
+        self.window.focus_position = 'body'
+
+    def add_track_callback(self, track):
+        self.playlist.add_track(track)
+
+    def play_track_callback(self, track):
+        self.player.play(track.url)
 
     def main_loop(self):
         self.loop.run()
 
 
-class Topbar(urwid.Columns):
-    def __init__(self):
+class Top(urwid.Columns):
+    def __init__(self, player):
+        self.player = player
         self.time_total = urwid.Text('0:00')
         self.time_current = urwid.Text('0:00')
         self.title = urwid.Text('')
+        self.volume = urwid.Text('Volume: %f' % self.player.get_volume())
         self._items = [
-            (len(self.time_total.get_text()[0]), self.time_total),
-            (3, urwid.Text(' / ')),
-            (len(self.time_total.get_text()[0]), self.time_current),
+            ('pack', self.time_total),
+            ('pack', urwid.Text(' / ')),
+            ('pack', self.time_current),
             (3, urwid.Text('   ')),
-            self.title
-            ]
-        super(Topbar, self).__init__(self._items)
+            self.title,
+            ('pack', self.volume)
+        ]
+        super(Top, self).__init__(self._items)
 
-    def update(self, tr):
-        self.time_total = urwid.Text(tr._duration)
-        self.time_current = urwid.Text('0:00')
-        self.title = urwid.Text(tr.title)
-        self._items = [
-            (len(self.time_total.get_text()[0]), self.time_total),
-            (3, urwid.Text(' / ')),
-            (len(self.time_total.get_text()[0]), self.time_current),
-            (3, urwid.Text('   ')),
-            self.title
-            ]
-        super(Topbar, self).__init__(self._items)
-
-    def update_time(self, player):
-        if 'GST_STATE_PLAYING' in [x.value_name for x in player.get_state()]:
-            time = ceil(float(player.get_clock().get_time()) / 1000000.0)
+    def update(self, loop, args):
+        if self.player.player.get_state()[1].value_name == 'GST_STATE_PLAYING':
+            time = float(self.player.player.get_clock().get_time()) / 1000000.0
             self.time_current.set_text(printable_duration(time))
+        loop.set_alarm_in(0.5, self.update)
+
+    def set_volume_callback(self):
+        self.volume.set_text('Volume: %f' % self.player.get_volume())
+
+    def play_track_callback(self, track):
+        self.time_total.set_text(track.p_duration)
+        self.title.set_text(track.title)
 
 
-class Statusbar(urwid.Columns):
-    def __init__(self, ui):
-        self.ui = ui
-        self._items = [
-                urwid.Edit('')
-                ]
-        super(Statusbar, self).__init__(self._items)
+class Prompt(urwid.Edit):
+    def __init__(self):
+        super(Prompt, self).__init__()
 
-    def set_caption(self, txt):
-        self.contents[0][0].set_caption(txt)
+    def do_ask(self, caption, text=None):
+        self.set_caption(caption)
+        if text is not None:
+            self.set_text(text)
 
-    def set_text(self, txt):
-        self.contents[0][0].set_edit_text(txt)
+    def get_box(self):
+        return urwid.Frame(self)
 
     def keypress(self, size, key):
         if key == 'enter':
-            q = self.contents[0][0].edit_text
-            self.set_caption('')
-            self.set_text('')
-            self.ui.update_playlist(q)
+            urwid.emit_signal(self, 'perform_search')
         elif key == 'esc':
-            self.set_caption('')
-            self.set_text('')
-            self.ui.container.focus_position = 'body'
-        super(Statusbar, self).keypress(size, key)
+            urwid.emit_signal(self, 'cancel_input')
+        super(Prompt, self).keypress(size, key)
+
+    def hide(self):
+        self.set_caption('')
+        self.set_edit_text('')
+
+
+class Topstrip(urwid.Columns):
+    def __init__(self):
+        self.items = [
+            urwid.Divider(u'\u2015')
+        ]
+        super(Topstrip, self).__init__(self.items)
+
+
+class Botstrip(urwid.Columns):
+    def __init__(self):
+        self.current_view = urwid.Text('')
+        self.items = [
+            (5, urwid.Divider(u'\u2015')),
+            ('pack', self.current_view),
+            urwid.Divider(u'\u2015')
+        ]
+        super(Botstrip, self).__init__(self.items)
+
+    def change_current_view(self, s=None):
+        if s is not None:
+            self.current_view.set_text('[ %s ]' % s)
 
 
 class Tracklist(urwid.ListBox):
-    def __init__(self, ui, tracks):
-        self.items = []
-        self.ui = ui
-        for track in tracks:
-            self.items.append(TracklistItem(track))
-        super(Tracklist, self).__init__(urwid.SimpleListWalker(self.items))
+    def __init__(self, tracks=None):
+        self._items = []
+        self.top_strip = Topstrip()
+        self.bot_strip = Botstrip()
+        if tracks is not None:
+            for track in tracks:
+                self._items.append(TracklistItem(track))
+        super(Tracklist, self).__init__(urwid.SimpleListWalker(self._items))
 
     def update(self, tracks):
-        self.items = []
-        for tr in tracks:
-            self.items.append(TracklistItem(tr))
-        self.body = urwid.SimpleListWalker(self.items)
+        self._items = []
+        for track in tracks:
+            self._items.append(TracklistItem(track))
+        self.body = urwid.SimpleListWalker(self._items)
 
-    def keypress(self, size, key):
-        if key in ('up', 'down', 'j', 'k'):
-            self.ui.tracks_count.set_text('[%02d/%02d]' % (self.focus_position, len(self.items)))
-        return super(Tracklist, self).keypress(size, key)
+    def add_track(self, track):
+        self.body.append(track)
+
+    def get_selected(self):
+        return self.focus
+
+    def get_box(self):
+        return urwid.Frame(self, self.top_strip, self.bot_strip)
 
 
 class TracklistItem(urwid.WidgetWrap):
-    def __init__(self, tr):
-        self.api = tr['api']
-        self.title = tr['title']
-        self.url = tr['url']
-        self._duration = printable_duration(tr['duration'])
+    def __init__(self, track):
+        self.api = track['api']
+        self.title = track['title']
+        self.url = track['url']
+        self.duration = track['duration']
+        self.p_duration = printable_duration(self.duration)
         self.item = [
-                urwid.Text('%s' % self.title),
-                (len(self.api) + 4, urwid.Padding(urwid.Text('[%s]' % self.api), 'center', len(self.api) + 2)),
-                (10, urwid.Padding(urwid.Text(self._duration), 'right', len(self._duration))),
+            urwid.Text('%s' % self.title),
+            (len(self.api) + 4, urwid.Padding(urwid.Text('[%s]' % self.api), 'center', len(self.api) + 2)),
+            (10, urwid.Padding(urwid.Text(self.p_duration), 'right', len(self.p_duration))),
         ]
         self._w = urwid.AttrWrap(urwid.Columns(self.item), 'body', 'focus')
 
@@ -175,6 +203,35 @@ class TracklistItem(urwid.WidgetWrap):
         elif key == 'k':
             key = 'up'
         return key
+
+
+class Playlist(Tracklist):
+    def __init__(self, tracks=None):
+        super(Playlist, self).__init__(tracks)
+        self.bot_strip.change_current_view('Playlist')
+
+    def keypress(self, size, key):
+        if key == 'enter':
+            urwid.emit_signal(self, 'play_track', self.focus)
+        return super(Playlist, self).keypress(size, key)
+
+
+class Searchlist(Tracklist):
+    def __init__(self, tracks=None):
+        super(Searchlist, self).__init__(tracks)
+        self.bot_strip.change_current_view('Results')
+
+    def set_result_text(self, q):
+        self.bot_strip.change_current_view('Results: %s' % q)
+
+    def keypress(self, size, key):
+        if key == ' ':
+            urwid.emit_signal(self, 'add_track', self.focus)
+            pass
+        elif key == 'enter':
+            urwid.emit_signal(self, 'add_track', self.focus)
+            urwid.emit_signal(self, 'play_track', self.focus)
+        return super(Searchlist, self).keypress(size, key)
 
 
 def printable_duration(secs):
